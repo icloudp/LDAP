@@ -1,0 +1,74 @@
+
+### 一、OpenLDAP Sudo权限
+**1、OpenLDAP用户登录系统后默认为普通用户，可以在“ou=sudoers”下创建sudo角色，并分配sudo权限（和“/etc/sudoers”配置类似），如下图：**
+![](/images/1/90/sudo1.jpg)
+![](/images/1/90/sudo2.jpg)
+
+<br />
+**2、查看“user1”用户是否具有root权限，如下图：**
+![](/images/1/90/sudo3.jpg)
+
+<br />
+**3、sudo常见属性定义**
+- **sudoCommand**
+    可执行的二进制命令
+- **sudoHost**
+    可在哪些机器上执行sudoCommand定义的命令
+- **sudoUser**
+    限制哪些用户或哪些组用户具有sudo权限
+- **sudoOption**
+    定义超过自身权限及切换至其他用户时，是否需要输入当前用户密码
+- **sudoRunAs**
+    可切换到定义的用户身份下执行bash命令
+
+<br />
+### 二、OpenLDAP 主机权限
+
+( 主机权限用于限定OpenLDAP用户是否拥有OpenLDAP客户端服务器的登陆权限，通过用户或用户组的host属性控制 )
+
+#### 1、通过用户组的host属性控制组用户登陆服务器
+**1.1、修改OpenLDAP客户端服务器“/etc/nslcd.conf”配置文件:**
+
+```shell
+# vim /etc/nslcd.conf       # 添加以下内容
+pam_authz_search (&(objectClass=posixGroup)(memberUid=$username)(|(host=ALL)(host=x.x.x.x)(host=$hostname)(host=$fqdn)))    # x.x.x.x为此服务器ip地址
+
+# systemctl restart nslcd   # 重启nslcd服务
+```
+
+<br />
+**1.2、修改用户组属性，添加“hostObject”对象，并设置host值（host可以有多个），如下图：**
+![](/images/1/90/host1.jpg)
+![](/images/1/90/host2.jpg)
+
+<br />
+**1.3、验证用户登录，如下图：**
+![](/images/1/90/host3.jpg)
+
+<br />
+**1.4、将用户组的“host”属性修改为“ALL”，即访问所有添加到OpenLDAP的客户端服务器，如下图：**
+![](/images/1/90/host4.jpg)
+
+
+<br />
+#### 2、通过用户的host属性控制该用户登陆服务器
+**2.1、修改OpenLDAP客户端服务器“/etc/nslcd.conf”配置文件:**
+
+```shell
+# vim /etc/nslcd.conf       # 添加以下内容
+pam_authz_search (&(objectClass=posixAccount)(uid=$username)(|(host=ALL)(host=x.x.x.x)(host=$hostname)(host=$fqdn)))    # x.x.x.x为此服务器ip地址
+
+# systemctl restart nslcd   # 重启nslcd服务
+```
+
+<br />
+**2.2、修改用户属性，添加“hostObject”对象，并设置host值（host可以有多个），如下图：**
+![](/images/1/90/host5.jpg)
+![](/images/1/90/host6.jpg)
+
+<br />
+**2.3、验证用户登录，如下图：**
+![](/images/1/90/host7.jpg)
+
+
+
