@@ -10,4 +10,7 @@
 #### [6.OpenLDAP备份恢复](https://github.com/icloudp/LDAP/blob/master/6.OpenLDAP%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D.md)
 #### [7.OpenLDAP故障排除](https://github.com/icloudp/LDAP/blob/master/7.OpenLDAP%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4.md)
 
+</p>
+QQ: 739446060
+
 
