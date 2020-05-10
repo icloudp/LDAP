@@ -1,0 +1,158 @@
+
+#### 一、OpenLDAP自动初始化
+&emsp; **使用rpm包安装完OpenLDAP后会自动进行数据初始化（无需操作），包括：**
+- 生成默认配置文件，位于"/usr/local/openldap/etc/openldap"目录下
+- 修改hosts文件，添加"127.0.0.1   ldap.speech.local"解析记录（注：默认域名为"ldap.speech.local"）
+- 默认域为"dc=speech,dc=local"
+- 默认密码策略为"cn=defaults,ou=ppolicy,dc=speech,dc=local"
+- 默认密码复杂度为：0|01010101 （密码需要包含：1位大写字母、1位小写字母、1位数字、1位特殊字符）
+- 默认sudo配置为"cn=defaults,ou=sudoers,dc=speech,dc=local"
+- 服务启动为ldaps，监听636端口，证书位于"/usr/local/openldap/etc/openldap/cert"目录下
+- 配置文件"/usr/local/openldap/etc/openldap/slapd.conf"定义了默认管理员账号密码，如下：
+&emsp;&emsp; 管理员账号：cn=admin,dc=speech,dc=local
+&emsp;&emsp; 管理员密码：admin  &emsp; (加密存储)
+
+#### 二、修改OpenLDAP管理员密码
+&emsp; **安装完OpenLDAP后建议先修改管理员密码：**
+```shell
+# ldapctl pass
+New password:                                       # 新密码
+Re-enter new password:                              # 重复新密码
+{SSHA}OpdOgZEAgrBb4olpbSwSOTPEW7Q/4Myq              # 加密后的密码
+
+# vim /usr/local/openldap/etc/openldap/slapd.conf   # 修改配置文件
+rootdn      "cn=admin,dc=speech,dc=local"
+rootpw      {SSHA}OpdOgZEAgrBb4olpbSwSOTPEW7Q/4Myq  # 将rootpw值进行替换
+
+# ldapctl restart                                   # 重启openldap服务
+Stopping OpenLDAP (pid: 26939)   [ OK ]
+Starting OpenLDAP (pid: 27019)   [ OK ]
+```
+
+#### 三、创建OpenLDAP新证书
+&emsp; **OpenLDAP安装完后会使用默认证书来运行ldaps服务，考虑默认证书的安全性建议生成新证书：**
+
+```shell
+[root@local ~]# cd /usr/local/openldap/share/certs
+[root@local certs]# ./cert.sh           # 执行cert.sh脚本生成新证书
+Generating a 1024 bit RSA private key
+.....................................................++++++
+.......................++++++
+writing new private key to 'cert/ca.key'
+-----
+Generating a 1024 bit RSA private key
+..........++++++
+...++++++
+writing new private key to 'cert/server.key'
+-----
+Using configuration from openssl.cnf
+Check that the request matches the signature
+Signature ok
+The Subject's Distinguished Name is as follows
+countryName           :PRINTABLE:'CN'
+stateOrProvinceName   :ASN.1 12:'BeiJing'
+localityName          :ASN.1 12:'BeiJing'
+organizationName      :ASN.1 12:'*.speech.local'
+commonName            :ASN.1 12:'*.speech.local'                     # 注意：默认使用泛域名*.speech.local
+Certificate is to be certified until Oct  6 03:23:18 2029 GMT (3650 days)
+
+Write out database with 1 new entries
+Data Base Updated
+```
+```shell
+[root@local certs]# cp -fr cert /usr/local/openldap/etc/openldap     # 将配置目录下的cert目录替换
+[root@local certs]# ldapctl restart                                  # 重启服务
+
+```
+
+#### 四、修改默认密码复杂度
+```shell
+[root@local ~]# cat /usr/local/openldap/etc/openldap/pqparams.dat 
+# Data format: 0|UULLDDSS@)..
+# Or         : 1|UULLDDSS@)..
+#
+# 1st character is the modified passwords broadcast flag. 1 -> Broadcast, 0 -> Don't broadcast
+# 2nd character is a separator
+# U: Uppercase, L: Lowercase, D: Digit, S: Special characters -> from 3rd to 10th charater.
+# From the 11th character begins the list of forbidden characters
+# Defaulti: No broadcast, 1 Uppercase, 1 Lowercase, 1 digit, 1 Special and no forbidden characters
+0|00010101
+```
+```shell
+0|00000000  共10位
+     第1,2位默认使用"0|"
+     第3,4位表示密码必须包含几位大写字母，01包含1位、02则包含2位
+     第5,6位表示密码必须包含几位小写字母
+     第7,8位表示密码必须包含几位数字
+     第9,10位表示密码必须包含几位特殊字符
+
+     例如：
+      0|01010101       表示用户密码必须包含1位大写字母，1位小写字母，1位数字和1位特殊字符
+      0|03020100       表示用户密码必须包含3位大写字母，2位小写字母和1位数字
+```
+
+#### 五、OpenLDAP默认域及相关配置
+```shell
+[root@local ~]# cat /usr/local/openldap/etc/openldap/base.ldif
+
+
+# 初始化域
+dn: dc=speech,dc=local
+dc: speech
+objectClass: dcObject
+objectClass: organization
+o: Thinkit Inc.
+
+
+# 默认密码策略
+dn: ou=ppolicy,dc=speech,dc=local
+ou: ppolicy
+objectClass: organizationalUnit
+
+
+dn: cn=defaults,ou=ppolicy,dc=speech,dc=local
+cn: defaults
+objectClass: person
+objectClass: pwdPolicy
+objectClass: pwdPolicyChecker
+pwdAllowUserChange: TRUE        # 允许用户修改密码
+pwdAttribute: userPassword      # 对象的一个属性，用于标识用户密码
+pwdCheckQuality: 2              # 密码质量检测
+pwdCheckModule: pqchecker.so    # 密码质量检测模块
+pwdExpireWarning: 0             # 密码过期前警告天数
+pwdFailureCountInterval: 0      # 密码失败后恢复时间
+pwdGraceAuthnLimit: 0           # 密码过期后不能登录的天数，0代表禁止登录
+pwdInHistory: 3                 # 开启密码历史记录，用于保证不能和之前的密码相同
+pwdLockout: TRUE                # 超过定义次数，账号被锁定
+pwdLockoutDuration: 3600        # 密码连续输入错误次数后，账号锁定时间（秒）
+pwdMaxAge: 0                    # 密码最长有效期
+pwdMaxFailure: 60               # 密码最大失效次数，超过后账号被锁定
+pwdMinAge: 0                    # 密码最短有效期
+pwdMinLength: 8                 # 用户修改密码时最短密码长度
+pwdMustChange: FALSE
+pwdSafeModify: FALSE
+sn: defaultPasswordPolicy
+
+
+# 默认sudoers
+dn: ou=sudoers,dc=speech,dc=local
+ou: sudoers
+objectClass: organizationalUnit
+
+
+dn: cn=defaults,ou=sudoers,dc=speech,dc=local
+cn: defaults
+objectClass: sudoRole
+sudoOption: requiretty
+sudoOption: !visiblepw
+sudoOption: always_set_home
+sudoOption: env_reset
+sudoOption: env_keep =  "COLORS DISPLAY HOSTNAME HISTSIZE INPUTRC KDEDIR LS_COLORS"
+sudoOption: env_keep += "MAIL PS1 PS2 QTDIR USERNAME LANG LC_ADDRESS LC_CTYPE"
+sudoOption: env_keep += "LC_COLLATE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES"
+sudoOption: env_keep += "LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE"
+sudoOption: env_keep += "LC_TIME LC_ALL LANGUAGE LINGUAS _XKB_CHARSET XAUTHORITY"
+sudoOption: secure_path = /sbin:/bin:/usr/sbin:/usr/bin
+```
+
+
